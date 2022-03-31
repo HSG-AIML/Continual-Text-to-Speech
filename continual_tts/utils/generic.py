@@ -40,7 +40,7 @@ def get_trainer(trainer_name):
     :param trainer_name:
     :return: Trainer
     """
-    trainer_ = importlib.import_module(f"cl_tts.trainers.{trainer_name}")
+    trainer_ = importlib.import_module(f"continual_tts.trainers.{trainer_name}")
     Trainer = getattr(trainer_, "Trainer")
 
     return Trainer

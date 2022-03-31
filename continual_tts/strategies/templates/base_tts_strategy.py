@@ -1,5 +1,5 @@
-from typing import Dict, Callable
-
+from typing import Sequence, Optional
+import torch
 from torch.nn import Module
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
@@ -14,53 +14,58 @@ class BaseTTSStrategy(BaseSGDTemplate):
             self,
             model: Module,
             optimizer: Optimizer,
-            params: Dict,
-            forward_func: Callable,
-            criterion_func: Callable,
-            collator: Callable,
-            *,
-            num_workers: int = 4,
+            criterion: Module,
+            train_mb_size: int = 1,
+            train_epochs: int = 1,
+            eval_mb_size: int = 1,
             device="cpu",
-            plugins=None,
+            plugins: Optional[Sequence["SupervisedPlugin"]] = None,
             evaluator: EvaluationPlugin = default_evaluator,
+            eval_every=-1,
+            peval_mode="epoch",
     ):
         """
 
         :param model:
         :param optimizer:
-        :param params:
-        :param forward_func:
-        :param criterion_func:
+        :param train_mb_size:
+        :param train_epochs:
+        :param eval_mb_size:
         :param device:
         :param plugins:
         :param evaluator:
+        :param eval_every:
+        :param peval_mode:
         """
         super().__init__(model, optimizer,
-                         train_mb_size=params["train_mb_size"],
-                         train_epochs=params["train_epochs"],
-                         eval_mb_size=params["eval_mb_size"],
-                         device=device, plugins=plugins, evaluator=evaluator,
-                         eval_every=params["eval_every"],
-                         peval_mode=params["peval_mode"])
+                         train_mb_size=train_mb_size,
+                         train_epochs=train_epochs,
+                         eval_mb_size=eval_mb_size,
+                         device=device,
+                         plugins=plugins,
+                         evaluator=evaluator,
+                         eval_every=eval_every,
+                         peval_mode=peval_mode)
 
-        self.forward_func = forward_func
-        self.criterion_func = criterion_func
-        self.collator = collator
-        self.num_workers = num_workers
+        self._criterion = criterion
+        self.mb_outputs = None
+        self.mb_loss_dict = None
 
     def training_epoch(self, **kwargs):
         raise NotImplementedError
 
-    def make_train_dataloader(self, **kwargs):
+    def make_train_dataloader(
+            self, num_workers=0, shuffle=True, pin_memory=True,
+            persistent_workers=False, sampler=None, **kwargs
+    ):
         self.dataloader = DataLoader(
             self.experience.dataset,
-            collate_fn=self.collator,
+            collate_fn=self.experience.dataset.collate_fn,
             batch_size=self.train_mb_size,
-            sampler=None,  # For now no sampler is supported
-            num_workers=self.num_workers,
-            drop_last=False,
-            pin_memory=True,
-            shuffle=True
+            sampler=sampler,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            shuffle=shuffle
         )
 
     @property
@@ -76,24 +81,27 @@ class BaseTTSStrategy(BaseSGDTemplate):
 
     def _unpack_minibatch(self):
         """Move to device"""
-        for k in self.mbatch[0].keys():
-            self.mbatch[0][k] = self.mbatch[0][k].to(self.device)
-        self.mbatch[1] = self.mbatch[1].to(self.device)
+        self.mbatch = self.model.format_batch(self.mbatch)
+
+        # Add speaker embedding to the batch
+        speaker_embeddings = [
+            self.model.speaker_manager.get_d_vectors_by_speaker(spk) for spk in
+            self.mbatch["speaker_names"]]
+        speaker_embeddings = torch.FloatTensor(speaker_embeddings).squeeze(1)
+        self.mbatch["d_vectors"] = speaker_embeddings.to(self.device)
+
+        # Move to compute device
+        for k in self.mbatch.keys():
+            if isinstance(self.mbatch[k], torch.Tensor):
+                self.mbatch[k] = self.mbatch[k].to(self.device)
 
     def forward(self):
         """ Forward function for `self.mbatch`
-            mbatch[0]: mini batch data
-            mbatch[1]: speakers
+            self.mbatch: mini batch data
         """
-        return self.forward_func(
-            self.model,
-            self.mbatch[0],
-            self.mbatch[1]
+        outputs, loss_dict = self.model.train_step(
+            self.mbatch,
+            self._criterion
         )
 
-    def criterion(self):
-        """ Criterion function for self.mb_out
-        """
-        return self.criterion_func(self.mb_output,
-                                   self.mbatch[0],
-                                   self.mbatch[1])
+        return outputs, loss_dict

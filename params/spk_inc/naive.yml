@@ -1,0 +1,48 @@
+vctk-si[tac2]:
+  description: ""
+  tunable_parameters: Null
+
+  # Training
+  trainer: "spk_inc_trainer"
+  seed: 0
+  epochs: 80
+  batch_size: 32
+  metrics: ["loss"]
+  plugins: ["grad_clipper", "sample_synthesizer"]
+  grad_clip: 5.0
+  synthesize_samples_every: 10
+
+  # Strategy
+  strategy: "naive"
+
+  # Data
+  eval_split_size: 2.269117313365101e-05
+  datasets_root: "/raid/hhemati/Datasets/Speech/CL-TTS"
+  dataset_name: "VCTK"
+  benchmark: "vctk-spk-inc"
+  speaker_lists:
+    [
+      [ "vctk_p225" ],
+      [ "vctk_p229" ],
+      [ "vctk_p299" ],
+      [ "vctk_p329" ],
+      [ "vctk_p335" ],
+      [ "vctk_p307" ],
+      [ "vctk_p234" ],
+      [ "vctk_p362" ],
+      [ "vctk_p376" ]
+    ]
+
+  # Model
+  use_phonemes: True
+  phoneme_language: "en-us"
+
+  pretrained_tts_model: "tts_models/en/ljspeech/tacotron2-DCA"
+  pretrained_vocoder: "vocoder_models/universal/libri-tts/fullband-melgan"
+  model_manager_output_prefix: "./data/pretrained_models/"
+  model: "tacotron2"
+  use_d_vector_file: True
+  d_vector_dim: 256
+
+  sample_rate: 24000
+  resample: True
