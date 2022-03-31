@@ -5,38 +5,7 @@ from TTS.tts.configs.shared_configs import BaseDatasetConfig
 from TTS.tts.datasets import load_tts_samples
 
 from continual_tts.benchmarks.dataset.dataset_formatters import vctk, ljspeech
-from dataset.ctts_dataset import ContinualTTSDataset
-
-
-def get_tts_dataset(config, samples, is_eval, ap, tokenizer):
-    dataset = ContinualTTSDataset(
-        outputs_per_step=config.r if "r" in config else 1,
-        compute_linear_spec=config.model.lower() == "tacotron" or
-                            config.compute_linear_spec,
-        compute_f0=config.get("compute_f0", False),
-        f0_cache_path=config.get("f0_cache_path", None),
-        samples=samples,
-        ap=ap,
-        return_wav=config.return_wav if "return_wav" in config else False,
-        batch_group_size=0 if is_eval else
-        config.batch_group_size * config.batch_size,
-        min_text_len=config.min_text_len,
-        max_text_len=config.max_text_len,
-        min_audio_len=config.min_audio_len,
-        max_audio_len=config.max_audio_len,
-        phoneme_cache_path=config.phoneme_cache_path,
-        precompute_num_workers=config.precompute_num_workers,
-        use_noise_augment=False if is_eval else config.use_noise_augment,
-        verbose=False,
-        # speaker_id_mapping=speaker_id_mapping,
-        # d_vector_mapping=d_vector_mapping if
-        # config.use_d_vector_file else None,
-        tokenizer=tokenizer,
-        start_by_longest=config.start_by_longest,
-        # language_id_mapping=language_id_mapping,
-    )
-
-    return dataset
+from continual_tts.benchmarks.dataset.ctts_dataset import get_ctts_dataset
 
 
 def speaker_incremental_benchmark(
@@ -60,7 +29,7 @@ def speaker_incremental_benchmark(
         train_samples_i = [x for x in train_samples if
                            x["speaker_name"] in speakers_i]
 
-        dataset_train_i = get_tts_dataset(
+        dataset_train_i = get_ctts_dataset(
             config, train_samples_i, False, ap, tokenizer
         )
         dataset_train_i.targets = [-1] * len(dataset_train_i)
@@ -70,7 +39,7 @@ def speaker_incremental_benchmark(
 
         # Test dataset
         test_samples_i = []
-        dataset_test_i = get_tts_dataset(
+        dataset_test_i = get_ctts_dataset(
             config, test_samples_i, True, ap, tokenizer
         )
         dataset_test_i.targets = []
