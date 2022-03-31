@@ -1,4 +1,8 @@
-# Continual-Text-to-Speech (TTS)
+# Continual Text-to-Speech (TTS)
+
+<p align="center">
+  <img src="assets/avalanche_coquiTTS.png" />
+</p>
 
 TBA: Introduction
 
